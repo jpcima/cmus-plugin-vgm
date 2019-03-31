@@ -1,0 +1,3 @@
+[submodule "thirdparty/libvgm"]
+	path = thirdparty/libvgm
+	url = https://github.com/ValleyBell/libvgm.git
