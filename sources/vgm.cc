@@ -25,11 +25,13 @@ static_assert(sizeof(WAVE_32BS) == 2 * sizeof(INT32) &&
 
 static constexpr int samplerate = 44100;
 static constexpr UINT32 maxrender = 4096;
-static UINT32 maxloops = 2;
+static const double fadefactor = std::exp(-1.0 / samplerate);
+static UINT32 maxloops = 1;
 
 struct vgm_private {
     enum class State { stopped, started, atend };
     State state = State::stopped;
+    double volume = 1;
     mapped_file map;
     std::unique_ptr<FileLoader> loader;
     std::unique_ptr<PlayerBase> player;
@@ -134,6 +136,7 @@ static int vgm_open_after_map(input_plugin_data *ip_data)
     player.SetSampleRate(samplerate);
     player.Start();
     priv->state = vgm_private::State::started;
+    priv->volume = 1;
 
     ip_data->sf = sf_bits(32) | sf_rate(samplerate) | sf_channels(2) | sf_signed(1);
     ip_data->sf |= sf_host_endian();
@@ -176,13 +179,9 @@ static int vgm_read(input_plugin_data *ip_data, char *buffer, int count)
     vgm_private *priv = (vgm_private *)ip_data->priv;
     PlayerBase &player = *priv->player;
 
-    if (priv->state == vgm_private::State::atend) {
-        if (player.GetLoopTicks() > 0) {
-            //TODO: fading
-            
-        }
-        return 0;
-    }
+    bool atend = priv->state == vgm_private::State::atend;
+    if (atend && player.GetLoopTicks() == 0)
+        return 0; // if not a looped song, just stop right here
 
     int want = count / sizeof(WAVE_32BS);
     if (want > maxrender) want = maxrender;  // workaround for libvgm internal limit
@@ -205,6 +204,18 @@ static int vgm_read(input_plugin_data *ip_data, char *buffer, int count)
         *dst = smpl;
     }
 
+    if (atend) { // if a looped song, smoothly turn down the volume
+        double vol = priv->volume;
+        for (int i = 0; i < got; ++i) {
+            WAVE_32BS *dst = &((WAVE_32BS *)buffer)[i];
+            vol *= fadefactor;
+            dst->L = (INT32)std::lround(vol * dst->L);
+            dst->R = (INT32)std::lround(vol * dst->R);
+            if (vol < 1e-4) { got = i; break; }
+        }
+        priv->volume = vol;
+    }
+
     return got * sizeof(WAVE_32BS);
 }
 
@@ -218,6 +229,7 @@ static int vgm_seek(input_plugin_data *ip_data, double offset)
     PlayerBase &player = *priv->player;
 
     priv->state = vgm_private::State::started;
+    priv->volume = 1;
     player.Reset();
 
     static WAVE_32BS skipbuf[maxrender];
