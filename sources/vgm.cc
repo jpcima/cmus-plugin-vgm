@@ -7,15 +7,17 @@
 #include "mapped_file.h"
 extern "C" {
 #include <comment.h>
+#include <xmalloc.h>
 #include <debug.h>
 }
 #include <player/vgmplayer.hpp>
 #include <player/s98player.hpp>
 #include <player/droplayer.hpp>
 #include <zlib.h>
+#include <memory>
 #include <cmath>
 #include <cstdio>
-#include <memory>
+#include <cstring>
 
 static_assert(sizeof(WAVE_32BS) == 2 * sizeof(INT32) &&
               alignof(WAVE_32BS) == alignof(INT32),
@@ -281,6 +283,27 @@ static char *vgm_codec_profile(input_plugin_data *ip_data)
 }
 
 //------------------------------------------------------------------------------
+static int vgm_set_maxloops(const char *val)
+{
+    unsigned num;
+    unsigned size;
+    if (sscanf(val, "%u%n", &num, &size) != 1 || strlen(val) != size) {
+        errno = EINVAL;
+        return -IP_ERROR_ERRNO;
+    }
+    maxloops = num;
+    return 0;
+}
+
+static int vgm_get_maxloops(char **val)
+{
+    char str[32];
+    sprintf(str, "%u", maxloops);
+    *val = xstrdup(str);
+    return 0;
+}
+
+//------------------------------------------------------------------------------
 const struct input_plugin_ops ip_ops = {
     .open = &vgm_open,
     .close = &vgm_close,
@@ -297,5 +320,5 @@ const struct input_plugin_ops ip_ops = {
 const int ip_priority = 50;
 const char * const ip_extensions[] = { "vgm", "vgz", "s98", "dro", nullptr };
 const char * const ip_mime_types[] = { nullptr };
-const struct input_plugin_opt ip_options[] = { { nullptr } };
+const struct input_plugin_opt ip_options[] = { {"max_loops", &vgm_set_maxloops, &vgm_get_maxloops}, { nullptr } };
 const unsigned ip_abi_version = IP_ABI_VERSION;
