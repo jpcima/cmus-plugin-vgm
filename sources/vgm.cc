@@ -22,6 +22,7 @@ static_assert(sizeof(WAVE_32BS) == 2 * sizeof(INT32) &&
               "The type WAVE_32BS is not structured as expected.");
 
 static constexpr int samplerate = 44100;
+static constexpr UINT32 maxrender = 4096;
 static UINT32 maxloops = 2;
 
 struct vgm_private {
@@ -182,6 +183,8 @@ static int vgm_read(input_plugin_data *ip_data, char *buffer, int count)
     }
 
     int want = count / sizeof(WAVE_32BS);
+    if (want > maxrender) want = maxrender;  // workaround for libvgm internal limit
+
     std::fill(buffer, buffer + want * sizeof(WAVE_32BS), 0);
     int got = player.Render(want, (WAVE_32BS *)buffer);
 
@@ -215,13 +218,12 @@ static int vgm_seek(input_plugin_data *ip_data, double offset)
     priv->state = vgm_private::State::started;
     player.Reset();
 
-    constexpr UINT32 max = 65536;
-    static WAVE_32BS skipbuf[max];
+    static WAVE_32BS skipbuf[maxrender];
     UINT32 skip = std::lround(offset * samplerate);
 
     while (skip > 0) {
         UINT32 count = skip;
-        if (count > max) count = max;
+        if (count > maxrender) count = maxrender;
         player.Render(count, skipbuf);
         skip -= count;
     }
