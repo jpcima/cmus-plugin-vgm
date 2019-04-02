@@ -193,13 +193,18 @@ static int vgm_read(input_plugin_data *ip_data, char *buffer, int count)
         INT32 *dst = (INT32 *)(buffer + i * sizeof(int32_t));
 
         INT32 smpl = *dst;
-        // 24 bit clipping
-        if (smpl > 0x7fffff)
-            smpl = 0x7fffff;
-        else if (smpl < -0x7fffff)
-            smpl = 0x7fffff;
+
+        constexpr unsigned smplbits = 24;
+        constexpr INT32 smplmax = (1 << (smplbits - 1)) - 1;
+        constexpr INT32 smplmin = -smplmax;
+
+        // clipping
+        if (smpl > smplmax)
+            smpl = smplmax;
+        else if (smpl < smplmin)
+            smpl = smplmin;
         // 32 bit conversion
-        smpl *= (1 << 8);
+        smpl *= 1 << (32 - smplbits);
 
         *dst = smpl;
     }
