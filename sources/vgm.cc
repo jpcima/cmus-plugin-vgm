@@ -82,13 +82,20 @@ static int vgz_open(input_plugin_data *ip_data, const UINT8 *data, size_t size)
     if (!fh)
         return -IP_ERROR_ERRNO;
 
-    gzFile gz = gzdopen(ip_data->fd, "r");
-    if (!gz)
+    int fd = dup(ip_data->fd);
+    if (fd == -1)
+        return -IP_ERROR_ERRNO;
+
+    struct Gz_Deleter { void operator()(gzFile x) { gzclose(x); } };
+    std::unique_ptr<gzFile_s, Gz_Deleter> gz(gzdopen(fd, "r"));
+    if (!gz) {
+        close(fd);
         return -IP_ERROR_FILE_FORMAT;
+    }
 
     int gzcount;
     UINT8 buffer[8192];
-    while ((gzcount = gzread(gz, buffer, sizeof(buffer))) > 0) {
+    while ((gzcount = gzread(gz.get(), buffer, sizeof(buffer))) > 0) {
         if (fwrite(buffer, 1, gzcount, fh.get()) != gzcount)
             return -IP_ERROR_ERRNO;
     }
@@ -167,6 +174,13 @@ static int vgm_close(input_plugin_data *ip_data)
     d_print("vgm_close(%p)\n", ip_data);
 
     vgm_private *priv = (vgm_private *)ip_data->priv;
+    PlayerBase *player = priv->player.get();
+
+    if (player) {
+        player->Stop();
+        player->UnloadFile();
+    }
+
     delete priv;
     ip_data->priv = nullptr;
     return 0;
