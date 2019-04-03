@@ -13,12 +13,18 @@ extern "C" {
 #include <player/vgmplayer.hpp>
 #include <player/s98player.hpp>
 #include <player/droplayer.hpp>
+#include <utils/MemoryLoader.h>
 #include <zlib.h>
 #include <memory>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 
+//------------------------------------------------------------------------------
+struct DATA_LOADER_delete { void operator()(DATA_LOADER *x) const noexcept { DataLoader_Deinit(x); } };
+typedef std::unique_ptr<DATA_LOADER, DATA_LOADER_delete> DATA_LOADER_u;
+
+//------------------------------------------------------------------------------
 static_assert(sizeof(WAVE_32BS) == 2 * sizeof(INT32) &&
               alignof(WAVE_32BS) == alignof(INT32),
               "The type WAVE_32BS is not structured as expected.");
@@ -33,7 +39,7 @@ struct vgm_private {
     State state = State::stopped;
     double volume = 1;
     mapped_file map;
-    std::unique_ptr<FileLoader> loader;
+    DATA_LOADER_u loader;
     std::unique_ptr<PlayerBase> player;
 };
 
@@ -121,23 +127,26 @@ static int vgm_open_after_map(input_plugin_data *ip_data)
     const UINT8 *data = (const UINT8 *)map.data();
     size_t size = map.size();
 
-    FileLoader *loader = new FileLoader;
+    DATA_LOADER *loader = MemoryLoader_Init(data, size);
+    if (!loader)
+        throw std::bad_alloc();
     priv->loader.reset(loader);
-    loader->SetPreloadBytes(0x100);
-    if (loader->LoadData(size, data) != 0)
+
+    DataLoader_SetPreloadBytes(loader, 0x100);
+    if (DataLoader_Load(loader) != 0)
         return -IP_ERROR_FILE_FORMAT;
 
-    if (VGMPlayer::IsMyFile(*loader) == 0)
+    if (VGMPlayer::IsMyFile(loader) == 0)
         priv->player.reset(new VGMPlayer);
-    else if (S98Player::IsMyFile(*loader) == 0)
+    else if (S98Player::IsMyFile(loader) == 0)
         priv->player.reset(new S98Player);
-    else if (DROPlayer::IsMyFile(*loader) == 0)
+    else if (DROPlayer::IsMyFile(loader) == 0)
         priv->player.reset(new DROPlayer);
     else
         return -IP_ERROR_FILE_FORMAT;
 
     PlayerBase &player = *priv->player;
-    if (player.LoadFile(*loader) != 0)
+    if (player.LoadFile(loader) != 0)
         return -IP_ERROR_FILE_FORMAT;
     player.SetCallback(&vgm_play_callback, priv);
     player.SetSampleRate(samplerate);
@@ -272,9 +281,41 @@ static int vgm_read_comments(input_plugin_data *ip_data, struct keyval **comment
     PlayerBase &player = *priv->player;
     GROWING_KEYVALS(c);
 
-    const char *title = player.GetSongTitle();
+    const char *title = NULL;
+    const char *author = NULL;
+    const char *game = NULL;
+    const char *date = NULL;
+    const char *comment = NULL;
+    const char *system = NULL;
+
+    const char *const *tags = player.GetTags();
+    for (const char *const *t = tags; *t; t += 2) {
+        if (!strcmp(t[0], "TITLE"))
+            title = t[1];
+        else if (!strcmp(t[0], "ARTIST"))
+            author = t[1];
+        else if (!strcmp(t[0], "GAME"))
+            game = t[1];
+        else if (!strcmp(t[0], "DATE"))
+            date = t[1];
+        else if (!strcmp(t[0], "COMMENT"))
+            comment = t[1];
+        else if (!strcmp(t[0], "SYSTEM"))
+            system = t[1];
+    }
+
     if (title && title[0])
         comments_add_const(&c, "title", title);
+    if (author && author[0])
+        comments_add_const(&c, "artist", author);
+    if (game && game[0])
+        comments_add_const(&c, "album", game);
+    if (date && date[0])
+        comments_add_const(&c, "date", date);
+    if (comment && comment[0])
+        comments_add_const(&c, "comment", comment);
+    if (system && system[0])
+        comments_add_const(&c, "genre", system);
 
     keyvals_terminate(&c);
     *comments = c.keyvals;
