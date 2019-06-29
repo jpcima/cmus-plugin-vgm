@@ -8,4 +8,4 @@ if test -z "$ver"; then
     exit 1
 fi
 
-git-archive-all --prefix "cmus-plugin-libvgm-$ver/" "cmus-plugin-libvgm-$ver.tar"
+git-archive-all --prefix "cmus-plugin-vgm-$ver/" "cmus-plugin-vgm-$ver.tar"
