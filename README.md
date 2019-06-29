@@ -9,4 +9,4 @@ Video Game Music file support for cmus (vgm/vgz/dro/s98)
 
 ## TODO
 
-- support the tags (needs some work on libvgm)
+- support fast seeking
