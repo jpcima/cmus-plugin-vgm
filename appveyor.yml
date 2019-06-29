@@ -1,0 +1,12 @@
+# Build settings for Appveyor CI
+
+image: Ubuntu
+
+configuration: Release
+
+build_script:
+  - git submodule update --init --recursive
+  - mkdir build
+  - cd build
+  - cmake -DCMAKE_BUILD_TYPE=Release ..
+  - cmake --build .
