@@ -1,6 +1,10 @@
 # cmus-plugin-vgm
 Video Game Music file support for cmus (vgm/vgz/dro/s98)
 
+## Download
+
+Get from [Open Build Service](https://software.opensuse.org//download.html?project=home%3Ajpcima&package=cmus-plugin-vgm).
+
 ## Options
 
 | Option name           | Value                                                                                                             |
