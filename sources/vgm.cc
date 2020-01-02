@@ -259,16 +259,7 @@ static int vgm_seek(input_plugin_data *ip_data, double offset)
     priv->state = vgm_private::State::started;
     priv->volume = 1;
     player.Reset();
-
-    static WAVE_32BS skipbuf[maxrender];
-    UINT32 skip = std::lround(offset * samplerate);
-
-    while (skip > 0) {
-        UINT32 count = skip;
-        if (count > maxrender) count = maxrender;
-        player.Render(count, skipbuf);
-        skip -= count;
-    }
+    player.Seek(PLAYPOS_SAMPLE, std::lround(offset * samplerate));
 
     return 0;
 }
