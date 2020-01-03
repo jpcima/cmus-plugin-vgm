@@ -251,8 +251,6 @@ static int vgm_seek(input_plugin_data *ip_data, double offset)
 {
     d_print("vgm_seek(%p)\n", ip_data);
 
-    //TODO: optimize this
-
     vgm_private *priv = (vgm_private *)ip_data->priv;
     PlayerBase &player = *priv->player;
 
